@@ -60,17 +60,24 @@ def check_message_add(message_type, msg):
 
 
 def check_message_delete(message_type, msg):
+    if len(msg) < 8:
+        return "Please specify delete type"
     messages = []
-    if msg.startswith("?delete " + message_type):
-        index = int(msg.split("?delete " + message_type + " ", 1)[1])
-        delete_list_elements(message_type, index)
-        messages = db[message_type]
-        return messages
+    index = int(msg.split("?delete " + message_type + " ", 1)[1])
+    delete_list_elements(message_type, index)
+    messages = db[message_type]
+    return messages
+
+
+def return_list(message_type):
+    if message_type in db.keys():
+        list = db[message_type]
+        return list
 
 
 @client.event
 async def on_ready():
-    print('We have logged in as {0.user}'.format(client))
+    print('Successfully logged in as {0.user}'.format(client))
 
 
 @client.event
@@ -78,7 +85,7 @@ async def on_message(message):
     msg = message.content
     if message.author == client.user:
         return
-    if msg.startswith('?hello'):
+    if msg.startswith('?quote'):
         quote = get_quote()
         await message.channel.send(quote)
         return
@@ -101,12 +108,11 @@ async def on_message(message):
             msg,
         ))
         return
-
-    if msg.startswith("?list"):
-        encouragements = []
-        if "encouragements" in db.keys():
-            encouragements = db["encouragements"]
-        await message.channel.send(encouragements)
+    if msg.startswith("?customlist encouragements"):
+        await message.channel.send(return_list("encouragements"))
+        return
+    if msg.startswith("?customlist greetings"):
+        await message.channel.send(return_list("greetings"))
         return
     if msg.startswith("?responding "):
         value = msg.split("?responding ", 1)[1]
@@ -121,17 +127,17 @@ async def on_message(message):
     if db["responding"] and msg.startswith("?"):
         msg = msg.lower()
         if any(word in msg for word in greetings):
+            options = starter_greetings
             if "greetings" in db.keys():
-                options = starter_greetings
                 options = options + db["greetings"].value
-                await message.channel.send(random.choice(options))
-                return
+            await message.channel.send(random.choice(options))
+            return
         if any(word in msg for word in sad_words):
+            options = starter_encouragements
             if "encouragements" in db.keys():
-                options = starter_encouragements
                 options = options + db["encouragements"].value
-                await message.channel.send(random.choice(options))
-                return
+            await message.channel.send(random.choice(options))
+            return
 
 
 keep_alive()

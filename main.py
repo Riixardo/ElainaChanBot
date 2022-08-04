@@ -20,6 +20,8 @@ greetings = [
     "welcome", "howdy", "bonjour"
 ]
 
+commanders = ["add", "delete", "quote", "customlist", "ban", "unban"]
+
 starter_encouragements = [
     "Don't worry, I'm here UWU", "Hang in there Goshujin Sama",
     "Never fear, Elaina is here!"
@@ -49,10 +51,13 @@ def update_lists(message_type, message):
 
 
 def delete_list_elements(message_type, index):
+    index_in_range = False
     messages = db[message_type]
     if len(messages) > index:
         del messages[index]
+        index_in_range = True
     db[message_type] = messages
+    return index_in_range
 
 
 def check_message_add(message_type, msg):
@@ -61,13 +66,16 @@ def check_message_add(message_type, msg):
 
 
 def check_message_delete(message_type, msg):
-    if len(msg) < 8:
-        return "Please specify delete type"
     messages = []
-    index = int(msg.split("?delete " + message_type + " ", 1)[1])
-    delete_list_elements(message_type, index)
+    index_in_range = False
+    try:
+        index = int(msg.split("?delete " + message_type + " ", 1)[1])
+    except:
+        return (messages, index_in_range)
+    if (delete_list_elements(message_type, index)): index_in_range = True
+    else: index_in_range = False
     messages = db[message_type]
-    return messages
+    return (messages, index_in_range)
 
 
 def return_list(message_type):
@@ -100,10 +108,8 @@ async def ban(ctx, member: discord.Member, *, reason=None):
 async def unban(ctx, *, member):
     banned_users = await ctx.guild.bans()
     member_name, member_discriminator = member.split("#")
-
     for ban_entry in banned_users:
         user = ban_entry.user
-
         if (user.name, user.discriminator) == (member_name,
                                                member_discriminator):
             await ctx.guild.unban(user)
@@ -111,20 +117,88 @@ async def unban(ctx, *, member):
             return
 
 
-@client.command()
-async def add(ctx, args):
+@unban.error
+async def unban_error(ctx, error):
     proceed = False
-    if args == "encouragements": proceed = True
-    if args == "greetings": proceed = True
+    if isinstance(error, commands.CommandInvokeError): proceed = True
+    if isinstance(error, commands.MissingRequiredArgument): proceed = True
+    if (proceed):
+        await ctx.send('Must specify a discord user')
+
+
+@client.command()
+async def add(ctx, *args):
+    proceed = False
+    if len(args) == 0 or len(args) == 1:
+        await ctx.send("No argument(s)!")
+        return
+    if args[0] == "encouragements": proceed = True
+    if args[0] == "greetings": proceed = True
     if proceed:
-        check_message_add(args, ctx.message.content)
+        check_message_add(args[0], ctx.message.content)
         await ctx.send("New message added")
+    else:
+        await ctx.send("Invalid argument")
 
 
-@add.error
-async def add_error(ctx, error):
-    if isinstance(error, commands.MissingRequiredArgument):
-        await ctx.send('No argument added!')
+@client.command()
+async def delete(ctx, *args):
+    if args == ():
+        await ctx.send("No argument!")
+        return
+    proceed = False
+    if args[0] == "encouragements": proceed = True
+    if args[0] == "greetings": proceed = True
+    if (not proceed):
+        await ctx.send("Invalid argument")
+        return
+    if len(args) == 1:
+        await ctx.send("No index provided")
+        return
+    if proceed:
+        result = check_message_delete(args[0], ctx.message.content)
+        if (result[1] is True):
+            await ctx.send(list(result[0]))
+        else:
+            await ctx.send("Index not in range")
+    else:
+        ctx.send("Invalid argument")
+
+
+@client.command()
+async def customlist(ctx, *args):
+    if args == ():
+        await ctx.send("No argument!")
+        return
+    if (len(args) > 1):
+        await ctx.send("Invalid argument")
+        return
+    proceed = False
+    if args[0] == "encouragements": proceed = True
+    if args[0] == "greetings": proceed = True
+    if proceed:
+        await ctx.send(list(return_list(args[0])))
+    else:
+        await ctx.send("Invalid argument")
+
+
+@client.command()
+async def responding(ctx, *boolean):
+    if (len(boolean) == 0):
+        await ctx.send("No argument")
+        return
+    if (len(boolean) > 1):
+        await ctx.send("Argument invalid")
+        return
+    b = boolean[0].lower()
+    if b == "true":
+        db["responding"] = True
+        await ctx.send("Message reponding is ON")
+    elif b == "false":
+        db["responding"] = False
+        await ctx.send("Message responding is OFF")
+    else:
+        await ctx.send("Argument invalid")
 
 
 @client.event
@@ -137,36 +211,6 @@ async def on_message(message):
     msg = message.content
     if message.author == client.user:
         return
-    if msg.startswith("?delete encouragements"):
-        await message.channel.send(
-            list(check_message_delete(
-                "encouragements",
-                msg,
-            )))
-        return
-    if msg.startswith("?delete greetings"):
-        await message.channel.send(
-            list(check_message_delete(
-                "greetings",
-                msg,
-            )))
-        return
-    if msg.startswith("?customlist encouragements"):
-        await message.channel.send(list(return_list("encouragements")))
-        return
-    if msg.startswith("?customlist greetings"):
-        await message.channel.send(list(return_list("greetings")))
-        return
-    if msg.startswith("?responding "):
-        value = msg.split("?responding ", 1)[1]
-        if value.lower() == "true":
-            db["responding"] = True
-            await message.channel.send("Responding is on")
-            return
-        elif value.lower() == "false":
-            db["responding"] = False
-            await message.channel.send("Responding is off")
-            return
     if db["responding"] and msg.startswith("?"):
         msg = msg.lower()
         if any(word in msg for word in greetings):

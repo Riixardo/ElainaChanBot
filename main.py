@@ -6,9 +6,11 @@ import random
 from replit import db
 from keep_alive import keep_alive
 from discord.ext import commands
-import youtube_dl
 
-client = commands.Bot(command_prefix='?')
+intents = discord.Intents.all()
+intents.members = True
+
+client = commands.Bot(command_prefix='?', intents=intents)
 client.load_extension("greet_encourage")
 
 sad_words = [
@@ -39,49 +41,6 @@ def get_quote():
     json_data = json.loads(response.text)
     quote = json_data[0]['q'] + " -" + json_data[0]['a']
     return quote
-
-
-def update_lists(message_type, message):
-    if message_type.lower() in db.keys():
-        tempList = db[message_type.lower()].value
-        tempList.append(message)
-        db[message_type] = tempList
-    else:
-        db[message_type] = [message]
-
-
-def delete_list_elements(message_type, index):
-    index_in_range = False
-    messages = db[message_type]
-    if len(messages) > index:
-        del messages[index]
-        index_in_range = True
-    db[message_type] = messages
-    return index_in_range
-
-
-def check_message_add(message_type, msg):
-    new_message = msg.split("?add " + message_type + " ", 1)[1]
-    update_lists(message_type, new_message)
-
-
-def check_message_delete(message_type, msg):
-    messages = []
-    index_in_range = False
-    try:
-        index = int(msg.split("?delete " + message_type + " ", 1)[1])
-    except:
-        return (messages, index_in_range)
-    if (delete_list_elements(message_type, index)): index_in_range = True
-    else: index_in_range = False
-    messages = db[message_type]
-    return (messages, index_in_range)
-
-
-def return_list(message_type):
-    if message_type in db.keys():
-        list = db[message_type]
-        return list
 
 
 @client.command()
@@ -127,62 +86,6 @@ async def unban_error(ctx, error):
 
 
 @client.command()
-async def add(ctx, *args):
-    proceed = False
-    if len(args) == 0 or len(args) == 1:
-        await ctx.send("No argument(s)!")
-        return
-    if args[0] == "encouragements": proceed = True
-    if args[0] == "greetings": proceed = True
-    if proceed:
-        check_message_add(args[0], ctx.message.content)
-        await ctx.send("New message added")
-    else:
-        await ctx.send("Invalid argument")
-
-
-@client.command()
-async def delete(ctx, *args):
-    if args == ():
-        await ctx.send("No argument!")
-        return
-    proceed = False
-    if args[0] == "encouragements": proceed = True
-    if args[0] == "greetings": proceed = True
-    if (not proceed):
-        await ctx.send("Invalid argument")
-        return
-    if len(args) == 1:
-        await ctx.send("No index provided")
-        return
-    if proceed:
-        result = check_message_delete(args[0], ctx.message.content)
-        if (result[1] is True):
-            await ctx.send(list(result[0]))
-        else:
-            await ctx.send("Index not in range")
-    else:
-        ctx.send("Invalid argument")
-
-
-@client.command()
-async def customlist(ctx, *args):
-    if args == ():
-        await ctx.send("No argument!")
-        return
-    if (len(args) > 1):
-        await ctx.send("Invalid argument")
-        return
-    proceed = False
-    if args[0] == "encouragements": proceed = True
-    if args[0] == "greetings": proceed = True
-    if proceed:
-        await ctx.send(list(return_list(args[0])))
-    else:
-        await ctx.send("Invalid argument")
-
-
-@client.command()
 async def responding(ctx, *boolean):
     if (len(boolean) == 0):
         await ctx.send("No argument")
@@ -208,11 +111,11 @@ async def on_ready():
 
 @client.event
 async def on_message(message):
-    msg = message.content
+    msg = message.content.lower()
     if message.author == client.user:
         return
-    if db["responding"] and msg.startswith("?"):
-        msg = msg.lower()
+    if db["responding"] and msg.startswith("?") and not any(
+            word in msg for word in commanders):
         if any(word in msg for word in greetings):
             options = starter_greetings
             if "greetings" in db.keys():
